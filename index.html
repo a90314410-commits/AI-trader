@@ -564,6 +564,28 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('data:text/java
     }
   };
 
+  window.ibkrReconnect = async function(){
+    if(!hasApi()){ if(typeof window.ts==='function') window.ts('請先設定 API Base URL','error'); return; }
+    const btn = document.getElementById('ibkrReconnectBtn');
+    if(btn){ btn.disabled=true; btn.textContent='重連中...'; }
+    try{
+      const d = await window.aP('/api/ibkr/reconnect', {});
+      if(d && d.ok){
+        window.IB = {ok:true, ts:Date.now(), d:d.result||d, e:'', acct:window.IB&&window.IB.acct, pos:window.IB&&window.IB.pos};
+        if(typeof window.ts==='function') window.ts('IBKR 重連成功 (clientId='+d.client_id+')','success');
+      } else {
+        const err = (d && d.last_error) ? d.last_error : '重連失敗';
+        if(typeof window.ts==='function') window.ts('重連失敗: '+err,'error');
+      }
+    }catch(e){
+      if(typeof window.ts==='function') window.ts('重連例外: '+String(e),'error');
+    }finally{
+      if(btn){ btn.disabled=false; btn.textContent='重新連線'; }
+      if(typeof window.cI==='function') await window.cI(false);
+      if(window.S && window.S.tab===3 && typeof window.R==='function') window.R();
+    }
+  };
+
   window.lIA = async function(showToast){
     if(!hasApi()) return null;
     try{
@@ -636,7 +658,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('data:text/java
       '<div class="cd">'+
       '<div class="fb"><div><div style="font-size:15px;font-weight:700">IBKR Gateway / Paper</div><div style="font-size:11px;color:var(--text2);margin-top:4px">補回 Claude 指出的 IBKR 面板與預覽/送單路由。</div></div><span class="pl '+(ib.ok?'pl-b':'pl-h')+'">'+(ib.ok?'已連上':'未連上')+'</span></div>'+
       '<div class="g2" style="margin-top:10px"><div style="background:var(--card2);border-radius:10px;padding:10px"><div style="font-size:10px;color:var(--text2)">帳號</div><div style="font-size:16px;font-weight:700;margin-top:4px">'+(acct||'未讀取')+'</div><div style="font-size:11px;color:var(--text2);margin-top:4px">'+((ib.d&&ib.d.market_data_label)||'')+' · '+((ib.d&&ib.d.paper)?'Paper':'')+'</div></div><div style="background:var(--card2);border-radius:10px;padding:10px"><div style="font-size:10px;color:var(--text2)">NetLiq</div><div style="font-size:16px;font-weight:700;margin-top:4px">'+netliq+'</div><div style="font-size:11px;color:var(--text2);margin-top:4px">'+(ib.e||'')+'</div></div></div>'+
-      '<div class="g3" style="margin-top:10px"><button class="bs" style="background:var(--blue);padding:10px 14px" onclick="cI(true)">測試 IBKR</button><button class="bs" style="background:var(--green);padding:10px 14px" onclick="lIA(true)">讀取帳戶</button><button class="bs" style="background:var(--card2);padding:10px 14px" onclick="lIP(true)">讀取持倉</button></div>'+
+      '<div class="g3" style="margin-top:10px"><button class="bs" style="background:var(--blue);padding:10px 14px" onclick="cI(true)">測試 IBKR</button><button class="bs" style="background:var(--green);padding:10px 14px" onclick="lIA(true)">讀取帳戶</button><button class="bs" style="background:var(--card2);padding:10px 14px" onclick="lIP(true)">讀取持倉</button><button id="ibkrReconnectBtn" class="bs" style="background:var(--orange,#e07b2a);padding:10px 14px" onclick="ibkrReconnect()">重新連線</button></div>'+
       '</div>'+
       '<div class="st">報價 / K線 Router</div>'+
       '<div class="cd"><div style="font-size:12px;color:var(--text2);line-height:1.7">目前後端已補回 <b style="color:var(--blue)">/api/provider-status</b>、<b style="color:var(--blue)">/api/ibkr/*</b>、<b style="color:var(--blue)">/api/order/*</b>。</div>'+
