@@ -214,6 +214,18 @@ async function dRp(){const r=S.bt;if(!r){ts('請先完成回測','error');return
 
 // === SETTINGS ===
 function uS(k,v){S.st[k]=v;ps();R();if(k==='api')setTimeout(()=>{if(S.st.api)cH(false);else{HB={ok:false,msg:'未連線',ts:Date.now()};R()}},50)}
+// 全域 applyAg，供設定頁 onclick 使用
+window.applyAg = function(level){
+  const AG = {
+    0:{abp:8,  bth:0.64, sth:0.42, mp:3, scLim:15},
+    1:{abp:15, bth:0.58, sth:0.44, mp:5, scLim:20},
+    2:{abp:20, bth:0.54, sth:0.46, mp:5, scLim:30},
+  };
+  const p = AG[level]; if(!p) return;
+  S.st.ag=level; S.st.abp=p.abp; S.st.bth=p.bth;
+  S.st.sth=p.sth; S.st.mp=p.mp; S.st.scLim=p.scLim;
+  ps(); R();
+};
 function tA(){S.st.at=!S.st.at;if(S.st.at&&!hB())ts('建議先連上後端 API，才會使用定案版自動交易邏輯','info');ps();R();if(S.st.at)setTimeout(()=>aTR(true),300)}
 function clrN(){S.pf.nt=[];ps();R();ts('通知已清除','success')}
 function rP(){if(!confirm('確定重置？'))return;S.pf={cash:S.st.ic,pos:[],tr:[],wl:[],nt:[]};ps();R();ts('帳戶已重置')}
@@ -268,7 +280,49 @@ h+='</div>';e.innerHTML=h}
 function R3(){const e=document.getElementById('t3'),s=S.st;let h=`<div class="fi"><div class="st">後端 API / ngrok</div><div class="cd"><div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px">把 ngrok 畫面顯示的 <b style="color:var(--blue)">https://...ngrok-free.dev</b> 貼進來，不要加 /api/health。</div><input value="${s.api||''}" class="ip" placeholder="https://xxxx.ngrok-free.dev" autocapitalize="off" autocorrect="off" spellcheck="false" oninput="uS('api',this.value.trim())" onchange="uS('api',this.value.trim())"><div class="fc" style="gap:8px;margin-top:10px"><button class="bs" style="background:var(--blue);flex:1;padding:10px 14px" onclick="cH(true)">測試連線</button><button class="bs" style="background:var(--card2);flex:1;padding:10px 14px" onclick="uS('api','');HB={ok:false,msg:'未連線',ts:Date.now()};R();ts('已清除 API Base URL','info')">清除</button></div><div style="margin-top:10px;font-size:12px;color:${HB.ok?'var(--green)':'var(--orange)'}">狀態：${HB.ok?'已連線':'未連線'} ${HB.d&&HB.d.ai?'· AI 開啟':''}</div>`;
 if(HB.e)h+=`<div style="margin-top:6px;font-size:11px;color:var(--red);word-break:break-word">錯誤：${String(HB.e).replace(/^Error:/,'')}</div>`;
 h+=`<div style="margin-top:6px;font-size:11px;color:var(--text3)">提示：免費 ngrok 每次重開網址可能改變，改了就更新這裡。</div></div><div class="st">交易設定</div>`;
-[['初始資金','ic'],['最大持倉數','mp'],['手續費 %','cp'],['買入門檻','bth'],['賣出門檻','sth'],['停損 ATR','sa'],['追蹤止損 ATR','ta']].forEach(([l,k])=>{h+=`<div class="cd cd-s fb"><span style="font-size:14px">${l}</span><input type="number" value="${s[k]}" class="ip" style="width:100px;text-align:right" onchange="uS('${k}',Number(this.value))"></div>`});
+
+// ── 積極程度預設 ─────────────────────────────────────────────
+const AG_PRESETS = {
+  0: { label:'保守', desc:'每筆 8%，門檻嚴格，最多 3 倉，適合震盪盤', abp:8,  bth:0.64, sth:0.42, mp:3, scLim:15 },
+  1: { label:'平衡', desc:'每筆 15%，標準門檻，最多 5 倉，均衡配置',   abp:15, bth:0.58, sth:0.44, mp:5, scLim:20 },
+  2: { label:'積極', desc:'每筆 20%，門檻較低，最多 5 倉，強勢市適用', abp:20, bth:0.54, sth:0.46, mp:5, scLim:30 },
+};
+function applyAg(level){
+  const p = AG_PRESETS[level];
+  if(!p) return;
+  S.st.ag = level;
+  S.st.abp = p.abp;
+  S.st.bth = p.bth;
+  S.st.sth = p.sth;
+  S.st.mp  = p.mp;
+  S.st.scLim = p.scLim;
+  ps(); R();
+}
+// 若還沒設過積極程度，預設平衡
+if(S.st.ag == null) S.st.ag = 1;
+const curAg = S.st.ag != null ? Number(S.st.ag) : 1;
+const curPreset = AG_PRESETS[curAg] || AG_PRESETS[1];
+
+// ── 最大持倉數（保留，讓用戶可微調）─────────────────────────
+h += `<div class="cd cd-s fb"><span style="font-size:14px">最大持倉數</span><input type="number" value="${s.mp}" min="1" max="20" class="ip" style="width:100px;text-align:right" onchange="uS('mp',Math.max(1,Math.min(20,Number(this.value))))"></div>`;
+
+// ── 入場積極程度 ──────────────────────────────────────────────
+h += `<div class="cd"><div style="font-size:14px;font-weight:500;margin-bottom:12px">入場積極程度</div>`;
+h += `<div class="g3" style="margin-bottom:10px">`;
+[0,1,2].forEach(lv => {
+  const p = AG_PRESETS[lv];
+  const active = curAg === lv;
+  h += `<button class="bs" style="padding:12px 8px;background:${active?'var(--blue)':'var(--card2)'};border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px" onclick="applyAg(${lv})">
+    <span style="font-size:15px;font-weight:600">${p.label}</span>
+    <span style="font-size:10px;opacity:.7">單筆 ${p.abp}%</span>
+  </button>`;
+});
+h += `</div>`;
+h += `<div style="font-size:12px;color:var(--text2);line-height:1.7;padding:10px 12px;background:var(--card2);border-radius:10px">
+  <b style="color:var(--text)">${curPreset.label}</b>：${curPreset.desc}<br>
+  <span style="color:var(--text3);font-size:11px">第一筆投入 ${curPreset.abp*0.4}% · 買入門檻 ${curPreset.bth} · 賣出門檻 ${curPreset.sth} · 最多 ${curPreset.mp} 倉 · 掃描 Top ${curPreset.scLim}</span>
+</div></div>`;
+
 h+=`<div class="st">模擬控制</div><div class="cd"><div class="fb" style="margin-bottom:14px"><span style="font-size:15px">自動交易</span><button class="tg" style="background:${s.at?'var(--green)':'var(--text3)'}" onclick="tA()"><div class="tg-k" style="left:${s.at?'22px':'2px'}"></div></button></div><div class="g2" style="margin-bottom:12px"><div style="background:var(--card2);border-radius:12px;padding:12px;border:.5px solid var(--border)"><div style="font-size:11px;color:var(--text2)">自動巡檢 (分鐘)</div><input type="number" value="${s.atm||5}" class="ip" style="margin-top:8px;text-align:right" onchange="uS('atm',Math.max(1,Number(this.value)||5))"></div><div style="background:var(--card2);border-radius:12px;padding:12px;border:.5px solid var(--border)"><div style="font-size:11px;color:var(--text2)">單筆買入 (%)</div><input type="number" value="${s.abp||6}" class="ip" style="margin-top:8px;text-align:right" onchange="uS('abp',Math.max(1,Number(this.value)||6))"></div></div><div style="font-size:11px;color:var(--text2);line-height:1.7">上次執行：${aStamp()}<br>持股會依目前定案邏輯做自動減碼 / 賣出，並從擴大後的產業池補新倉。</div><div class="g2" style="margin-top:12px"><button class="bs" style="background:var(--card2);padding:10px 14px" onclick="clrN()">清空通知</button><button class="bs" style="background:var(--red);padding:10px 14px" onclick="rP()">重置帳戶</button></div></div>`;
 h+=`<div class="st">資料來源</div><div class="cd"><div style="font-size:12px;color:var(--text2);line-height:1.8"><div class="fb"><span>Finnhub (即時報價)</span><span style="color:var(--green)">✓ 已設定</span></div><div class="fb"><span>Twelve Data (歷史K線)</span><span style="color:var(--green)">✓ 已設定</span></div><div class="fb"><span>後端 API</span><span style="color:${HB.ok?'var(--green)':'var(--orange)'}">${HB.ok?'已連線':'未連線'}</span></div><div class="fb"><span>即時數據</span><span style="color:${LV?'var(--green)':'var(--orange)'}">${LV?'已連線':'等待'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--text3)">報價快取60秒 · K線快取4小時<br>有填 API Base URL 時會優先走你的 Flask 後端</div></div></div>`;
 h+=`<div class="st">策略引擎</div><div class="cd"><div style="font-size:12px;color:var(--text2);line-height:1.7"><b style="color:var(--blue)">三流評分系統 + 話題等級</b><br>技術 (SMA/RSI/MACD/BB/突破)<br>動量 (5d/20d/60d)<br>熵值 (波動率壓縮/樣本熵)<br><br>Regime: trend_bull / trend_bear / squeeze / range<br>若連上後端，選股池、話題等級、報告與自動交易會共用同一套定案邏輯，並把每次買賣寫入通知欄。</div></div>`;
@@ -3949,10 +4003,6 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('data:text/java
     return !!(window.IB && window.IB.ok);
   }
 
-  // 連續失敗計數：避免 Failed to fetch 洗版通知
-  if (!IBA.failCount) IBA.failCount = 0;
-  if (!IBA.lastFailMsg) IBA.lastFailMsg = '';
-
   async function runIbkrAuto(force){
     if (!hasApi() || IBA.disabled) return false;
     if (!(window.S && window.S.st && window.S.st.at)) return false;
@@ -3965,64 +4015,26 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('data:text/java
       if (!ok) return false;
       let resp = null;
       try{
-        // 3-minute timeout — auto-trade scans many stocks and is slow
-        const _ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const _tid  = _ctrl ? setTimeout(function(){ _ctrl.abort(); }, 180000) : null;
-        try {
-          const _b = window.aB ? window.aB() : '';
-          if (!_b) throw new Error('no_api');
-          const _headers = typeof window.aHd === 'function'
-            ? window.aHd({'Content-Type':'application/json'})
-            : {'Content-Type':'application/json'};
-          const _fetchOpts = {method:'POST', mode:'cors', cache:'no-store', headers:_headers,
-            body: JSON.stringify({
-              max_positions: num(window.S && window.S.st && window.S.st.mp, 5),
-              budget_pct: num(window.S && window.S.st && window.S.st.abp, 6),
-              scan_sector: txt(window.S && window.S.st && window.S.st.scSec || 'all') || 'all',
-              scan_limit: Math.max(20, num(window.S && window.S.st && window.S.st.scLim, 20)),
-              buy_threshold: num(window.S && window.S.st && window.S.st.bth, 0.58),
-              sell_threshold: num(window.S && window.S.st && window.S.st.sth, 0.44),
-              order_type: txt(window.S && window.S.st && window.S.st.ordType || 'MKT') || 'MKT',
-              dry_run: false
-            })};
-          if (_ctrl) _fetchOpts.signal = _ctrl.signal;
-          const _r = await fetch(_b + '/api/auto-trade', _fetchOpts);
-          if (_tid) clearTimeout(_tid);
-          if (!_r.ok) throw new Error('http_' + _r.status);
-          resp = await _r.json();
-        } finally {
-          if (_tid) clearTimeout(_tid);
-        }
-        IBA.failCount = 0;
-        IBA.lastFailMsg = '';
+        resp = await window.aP('/api/auto-trade', {
+          max_positions: num(window.S && window.S.st && window.S.st.mp, 5),
+          budget_pct: num(window.S && window.S.st && window.S.st.abp, 6),
+          scan_sector: txt(window.S && window.S.st && window.S.st.scSec || 'all') || 'all',
+          scan_limit: Math.max(20, num(window.S && window.S.st && window.S.st.scLim, 20)),
+          buy_threshold: num(window.S && window.S.st && window.S.st.bth, 0.58),
+          sell_threshold: num(window.S && window.S.st && window.S.st.sth, 0.44),
+          order_type: txt(window.S && window.S.st && window.S.st.ordType || 'MKT') || 'MKT',
+          dry_run: false
+        });
       }catch(e){
         const msg = txt(e && e.message || e) || 'auto_trade_failed';
-        const isNetworkErr = /failed to fetch|networkerror|load failed|aborted|net::/i.test(msg);
-        const isTimeout    = /timeout|abort/i.test(msg);
         if (/404|http_404/.test(msg)) IBA.disabled = true;
-
-        IBA.failCount = (IBA.failCount || 0) + 1;
-        IBA.lastFailMsg = msg;
-
-        if (isNetworkErr || isTimeout) {
-          // 完全靜音——後端排程器會繼續跑，不需要通知用戶
-          console.warn('[IBKR auto-trade] silent network error #' + IBA.failCount + ':', msg);
-        } else {
-          // 真正的 API 錯誤（404、auth 失敗等）才通知
-          if (!IBA.warned && typeof window.ts === 'function') window.ts('IBKR自動交易路由失敗: ' + msg, 'error');
-          IBA.warned = true;
-          pushIbkrNotice('WARN', 'IBKR自動交易', msg, {mode:'auto'});
-        }
+        if (!IBA.warned && typeof window.ts === 'function') window.ts('IBKR自動交易路由失敗','error');
+        IBA.warned = true;
+        pushIbkrNotice('WARN', 'IBKR自動交易', msg, {mode:'auto'});
         return false;
       }
       if (!(resp && resp.ok)){
         const msg = txt(resp && (resp.message || resp.error) || '未執行');
-        // IBKR 未連線等非致命錯誤：不推通知，只在 force 時 toast
-        const isIbkrDisconn = /ibkr_disconnected|ibkr_unavailable|ibkr_ping/i.test(msg);
-        if (isIbkrDisconn) {
-          if (force && typeof window.ts === 'function') window.ts('IBKR 未連線，請先啟動 IB Gateway', 'error');
-          return false;
-        }
         if (force && msg && typeof window.ts === 'function') window.ts('IBKR自動交易未執行：' + msg, 'error');
         if (force && msg) pushIbkrNotice('WARN', 'IBKR自動交易', msg, {mode:'auto'});
         return false;
@@ -4087,11 +4099,6 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('data:text/java
         meta.ibkrTrades = [];
         persist();
       }
-      // 清除通知也重置失敗計數，讓排程重新正常運作
-      IBA.failCount = 0;
-      IBA.lastFailMsg = '';
-      IBA.warned = false;
-      IBA.disabled = false;
       if (activeTab() === TAB_IBKR) setTimeout(renderIbkrActivity, 60);
       return out;
     };
